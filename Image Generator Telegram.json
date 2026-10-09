@@ -1,0 +1,292 @@
+{
+  "name": "Image Generator Telegram",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Image Generator",
+        "formDescription": "Masukkan deskripsi gambar yang ingin dibuat.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Prompt",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        0
+      ],
+      "id": "8fba1a44-5aba-45b3-947d-e74e82953fc4",
+      "name": "Input Prompt",
+      "webhookId": "618e2dc7-36fc-4a69-ac7a-ffa813665fa6"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.kie.ai/api/v1/jobs/createTask",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"grok-imagine/text-to-image\",\n  \"input\": {\n    \"prompt\": {{ JSON.stringify($json.Prompt) }},\n    \"aspect_ratio\": \"3:2\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "26b0dbab-25be-4839-a8ad-658dbe785e16",
+      "name": "Buat Task",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Pr2PfA2e8whCKKIw",
+          "name": "Kie AI Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.kie.ai/api/v1/jobs/recordInfo",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "taskId",
+              "value": "={{ $('Buat Task').item.json.data.taskId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        656,
+        0
+      ],
+      "id": "f7640b78-6cd8-4fa5-91c4-8949947f1035",
+      "name": "Cek Status",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Pr2PfA2e8whCKKIw",
+          "name": "Kie AI Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "49b7357e-6fea-4f6e-b857-7fc00808702c",
+              "leftValue": "={{ $json.data.state }}",
+              "rightValue": "success",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        0
+      ],
+      "id": "ad64cc61-8314-4d73-a47a-0a5619751344",
+      "name": "Status Success?"
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        432,
+        304
+      ],
+      "id": "0a20981d-7df6-47b0-8eb5-7a770aee980c",
+      "name": "Tunggu 10 detik",
+      "webhookId": "ad7a346b-c9af-4962-b3b3-1bab203753ed"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ambil data respons dari node Cek Status\nconst data = $input.first().json.data;\n\n// resultJson berupa string, ubah jadi objek JavaScript\nconst hasil = JSON.parse(data.resultJson);\nconst urls = hasil.resultUrls;\n\n// Validasi array hasil\nif (!Array.isArray(urls) || urls.length === 0) {\n  throw new Error('resultUrls kosong atau tidak ditemukan');\n}\n\n// Ambil URL pertama yang valid\nconst imageUrl = urls.find(u => typeof u === 'string' && u.startsWith('http'));\nif (!imageUrl) {\n  throw new Error('Tidak ada URL gambar yang valid');\n}\n\nreturn [{ json: { imageUrl } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1152,
+        -16
+      ],
+      "id": "da22dd53-0973-4ae3-b8e8-1dd803b0d78a",
+      "name": "Ambil URL Gambar"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.imageUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1360,
+        -32
+      ],
+      "id": "e3ab7f7f-4a0e-4b0b-8116-eba1e97865da",
+      "name": "Unduh Gambar"
+    },
+    {
+      "parameters": {
+        "operation": "sendPhoto",
+        "chatId": "6811087250",
+        "binaryData": true,
+        "additionalFields": {
+          "caption": "Gambar Sudah Jadi!"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1584,
+        -32
+      ],
+      "id": "340d1b29-1c09-4149-a1b5-4507cb388c97",
+      "name": "Kirim ke Telegram",
+      "webhookId": "9236ba9d-cd25-44ca-8af7-544df81fa3c6",
+      "credentials": {
+        "telegramApi": {
+          "id": "7d6XNkMzAiq4NEqp",
+          "name": "Telegram account 4"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Input Prompt": {
+      "main": [
+        [
+          {
+            "node": "Buat Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buat Task": {
+      "main": [
+        [
+          {
+            "node": "Tunggu 10 detik",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cek Status": {
+      "main": [
+        [
+          {
+            "node": "Status Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status Success?": {
+      "main": [
+        [
+          {
+            "node": "Ambil URL Gambar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tunggu 10 detik",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tunggu 10 detik": {
+      "main": [
+        [
+          {
+            "node": "Cek Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ambil URL Gambar": {
+      "main": [
+        [
+          {
+            "node": "Unduh Gambar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unduh Gambar": {
+      "main": [
+        [
+          {
+            "node": "Kirim ke Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "c194d4bf-fa5c-45d4-b863-8ce82d502f4f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dc96f10ae7dc95d3c138575ba243a0a167923dbcb524841d451aadf9135d5fb3"
+  },
+  "nodeGroups": [],
+  "id": "Vt2gtOBti5yt5CQz",
+  "tags": []
+}
